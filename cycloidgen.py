@@ -54,14 +54,14 @@ def cycloid(curve, radius=1, start=0):
 
 a = 1
 k = 3
-radius = 1 / 2
-curve = ParametricCurve(sp.sin(x), 2 * sp.cos(x))
+radius = 1
+curve = ParametricCurve(sp.sin(x), sp.cos(x))
 #  curve = ParametricCurve(x, a * sp.sin(k * x))
 
 #  cycloid(curve, radius)(0.9)
 
 start = 0
-cycles = 2.5
+cycles = 2
 samples = int(100 * cycles)
 cycloid_samples_x = np.zeros(samples)
 cycloid_samples_y = np.zeros(samples)
@@ -74,8 +74,9 @@ with open("cycloid.dat", "w") as fout:
     fout.write("% cycloid_x cycloid_y t\n")
     i = 0
     #  for t in np.linspace(start, start + 2 * np.pi * radius * cycles, num=samples):
+    pos = cycloid(curve, radius=radius, start=start)
     for t in np.linspace(start, start + 6.97, num=samples):
-        cycloid_coord = cycloid(curve, radius=radius, start=start)(t)
+        cycloid_coord = pos(t)
         curve_coord = curve.equation(t)
         fout.write(str(cycloid_coord[0]) + delimeter + str(cycloid_coord[1]) + delimeter + str(t) + '\n')
         cycloid_samples_x[i], cycloid_samples_y[i] = cycloid_coord
