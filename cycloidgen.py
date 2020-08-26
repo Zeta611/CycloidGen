@@ -33,12 +33,12 @@ def cycloid(curve, radius=1, start=0):
     def theta(t):
         global _cumulated_sum, _t_previous
         if _t_previous is None:
-            _cumulated_sum
+            _cumulated_sum \
                 = integrate.quad(curve.derivative().norm, start, t)[0] / radius
             _t_previous = t
             return _cumulated_sum
-        _cumulated_sum
-            += integrate.quad(curve.derivative().norm, _t_previous, t)[0]
+        _cumulated_sum \
+            += integrate.quad(curve.derivative().norm, _t_previous, t)[0] \
                 / radius
         _t_previous = t
         return _cumulated_sum
