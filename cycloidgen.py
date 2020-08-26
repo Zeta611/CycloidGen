@@ -25,30 +25,32 @@ class ParametricCurve:
         v_derivative = sp.diff(self.v_sym)
         return ParametricCurve(u_derivative, v_derivative)
 
-cumulated_sum = 0
-t_previous = None
+
+_cumulated_sum = 0
+_t_previous = None
 def cycloid(curve, radius=1, start=0):
     assert isinstance(curve, ParametricCurve)
     def theta(t):
-        global cumulated_sum, t_previous
-        if t_previous is None:
-            cumulated_sum = integrate.quad(curve.derivative().norm, start, t)[0] / radius
-            t_previous = t
-            return cumulated_sum
-        cumulated_sum += integrate.quad(curve.derivative().norm, t_previous, t)[0] / radius
-        t_previous = t
-        return cumulated_sum
+        global _cumulated_sum, _t_previous
+        if _t_previous is None:
+            _cumulated_sum
+                = integrate.quad(curve.derivative().norm, start, t)[0] / radius
+            _t_previous = t
+            return _cumulated_sum
+        _cumulated_sum
+            += integrate.quad(curve.derivative().norm, _t_previous, t)[0]
+                / radius
+        _t_previous = t
+        return _cumulated_sum
 
     def position(t):
         tangent = curve.derivative().equation(t) / curve.derivative().norm(t)
         angle = theta(t)
         transform = np.array([[-np.sin(angle), np.cos(angle) - 1],
                               [1 - np.cos(angle), -np.sin(angle)]])
-        #  print("T is ", curve.equation(t))
-        #  print("O is ", curve.equation(t) + radius * np.dot([[0,-1],[1,0]], tangent))
-        #  print("M is ", curve.equation(t) + radius * np.dot(transform, tangent))
         return curve.equation(t) + radius * np.dot(transform, tangent)
     return position
+
 
 a = 1
 k = 3
@@ -66,6 +68,7 @@ cycloid_samples_y = np.zeros(samples)
 curve_samples_x = np.zeros(samples)
 curve_samples_y = np.zeros(samples)
 
+# Save data for other visualization tools, e.g., TikZ.
 delimeter = ' '
 with open("cycloid.dat", "w") as fout:
     fout.write("% cycloid_x cycloid_y t\n")
@@ -79,6 +82,7 @@ with open("cycloid.dat", "w") as fout:
         curve_samples_x[i], curve_samples_y[i] = curve_coord
         i += 1
 
+# Show `curve` via matplotlib.
 fig = plt.figure(1)
 ax = fig.add_subplot(111)
 ax.plot(cycloid_samples_x, cycloid_samples_y, color='r', linewidth=0.5)
@@ -88,4 +92,3 @@ ax.set_aspect(1)
 plt.savefig("cycloid.png", dpi=500, bbox_inches="tight")
 #  plt.show()
 plt.clf()
-
