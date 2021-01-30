@@ -1,95 +1,122 @@
-# -*- coding: utf-8 -*-
-
+from __future__ import annotations
 from scipy import integrate
 import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
 
-x = sp.Symbol('x')
-sp.init_printing(use_unicode=True)
 
-class ParametricCurve:
-    def __init__(self, u, v):
-        self.u_sym = u
-        self.v_sym = v
-        self.u = sp.lambdify(x, u)
-        self.v = sp.lambdify(x, v)
-        self.equation = lambda t: np.array([self.u(t), self.v(t)])
-        self.norm = lambda t: np.linalg.norm(self.equation(t))
+class ParametricCurve2d:
+    def __init__(self, x, y, param=sp.Symbol("t")):
+        self.x = x
+        self.y = y
+        self.param = param
+
+        self._x_lambda = sp.lambdify(param, x)
+        self._y_lambda = sp.lambdify(param, y)
+
+        # Define self._derive lazily to avoid inifinite recursion.
+        self._deriv = None
+
+    def __repr__(self) -> str:
+        return f"ParametricCurve({self.x}, {self.y})"
+
+    def __call__(self, t: float):
+        return np.array([self._x_lambda(t), self._y_lambda(t)], dtype=float)
+
+    def norm(self, t: float) -> float:
+        return np.linalg.norm(self(t))
+
+    @property
+    def deriv(self) -> ParametricCurve2d:
+        # Define self._deriv on-demand.
+        if self._deriv is None:
+            self._deriv = ParametricCurve2d(
+                sp.diff(self.x), sp.diff(self.y), param=self.param
+            )
+        return self._deriv
+
+
+class Cycloid:
+    def __init__(
+        self,
+        base_curve: ParametricCurve2d,
+        radius: float = 1,
+        begin: float = 0,
+        end: float = 10,
+        num: int = 50,
+    ):
+        self.base_curve = base_curve
+        self.radius = radius
+        self.begin = begin
+        self.end = end
+        self.num = num
+
+        self._points = np.empty((num, 3), dtype=float)
+
+        t_prev = begin
+        theta = 0
+        for i, t in enumerate(np.linspace(begin, end, num)):
+            tangent = base_curve.deriv(t) / base_curve.deriv.norm(t)
+            rotate = np.array(
+                [
+                    [-np.sin(theta), np.cos(theta) - 1],
+                    [1 - np.cos(theta), -np.sin(theta)],
+                ]
+            )
+            self._points[i] = t, *(base_curve(t) + radius * rotate @ tangent)
+            theta += integrate.quad(base_curve.deriv.norm, t_prev, t)[0] / radius
+            t_prev = t
+
+    def __getitem__(self, key):
+        return self._points[key]
 
     def __repr__(self):
-        return "ParametricCurve(%s, %s)" % (self.u_sym, self.v_sym)
+        return f"Cycloid({self.base_curve}, )"
 
-    def derivative(self):
-        u_derivative = sp.diff(self.u_sym)
-        v_derivative = sp.diff(self.v_sym)
-        return ParametricCurve(u_derivative, v_derivative)
-
-
-_cumulated_sum = 0
-_t_previous = None
-def cycloid(curve, radius=1, start=0):
-    assert isinstance(curve, ParametricCurve)
-    def theta(t):
-        global _cumulated_sum, _t_previous
-        if _t_previous is None:
-            _cumulated_sum \
-                = integrate.quad(curve.derivative().norm, start, t)[0] / radius
-            _t_previous = t
-            return _cumulated_sum
-        _cumulated_sum \
-            += integrate.quad(curve.derivative().norm, _t_previous, t)[0] \
-                / radius
-        _t_previous = t
-        return _cumulated_sum
-
-    def position(t):
-        tangent = curve.derivative().equation(t) / curve.derivative().norm(t)
-        angle = theta(t)
-        transform = np.array([[-np.sin(angle), np.cos(angle) - 1],
-                              [1 - np.cos(angle), -np.sin(angle)]])
-        return curve.equation(t) + radius * np.dot(transform, tangent)
-    return position
+    def save(self, filename: str, delimeter: str = "\t") -> None:
+        fmt = "{t}{delimeter}{x}{delimeter}{y}\n"
+        with open(filename, "w", encoding="utf-8") as fout:
+            fout.write(fmt.format(t="t", x="x", y="y", delimeter=delimeter))
+            for t, x, y in self._points:
+                fout.write(fmt.format(t=t, x=x, y=y, delimeter=delimeter))
 
 
-a = 1
-k = 3
-radius = 1
-curve = ParametricCurve(sp.sin(x), sp.cos(x))
-#  curve = ParametricCurve(x, a * sp.sin(k * x))
+def plot_curves(
+    curve_samples, colors, filename: str, save: bool = True, show: bool = False
+) -> None:
+    """Show `curve_samples` via matplotlib."""
+    fig = plt.figure(1)
+    ax = fig.add_subplot(111)
+    for i, curve in enumerate(curve_samples):
+        ax.plot(curve[:, 1], curve[:, 2], color=colors[i], linewidth=0.5)
+    ax.set_aspect(1)
 
-#  cycloid(curve, radius)(0.9)
+    if filename.endswith(".png"):
+        plt.savefig(filename, dpi=500, bbox_inches="tight")
+    else:
+        plt.savefig(filename, bbox_inches="tight")
 
-start = 0
-cycles = 2
-samples = int(100 * cycles)
-cycloid_samples_x = np.zeros(samples)
-cycloid_samples_y = np.zeros(samples)
-curve_samples_x = np.zeros(samples)
-curve_samples_y = np.zeros(samples)
+    if show:
+        plt.show()
+    plt.clf()
+
+
+# Constants
+RADIUS = 1
+START = 0
+END = 6.97
+NUM = 200
+
+_t = sp.Symbol("t")
+circle = ParametricCurve2d(sp.sin(_t), sp.cos(_t))
+epicycloid = Cycloid(circle, radius=RADIUS, begin=START, end=END, num=NUM)
+
+circle_samp = np.column_stack(
+    (epicycloid[:, 0], np.vstack([circle(t) for t in epicycloid[:, 0]]))
+)
 
 # Save data for other visualization tools, e.g., TikZ.
-delimeter = ' '
-with open("cycloid.dat", "w") as fout:
-    fout.write("% cycloid_x cycloid_y t\n")
-    i = 0
-    #  for t in np.linspace(start, start + 2 * np.pi * radius * cycles, num=samples):
-    pos = cycloid(curve, radius=radius, start=start)
-    for t in np.linspace(start, start + 6.97, num=samples):
-        cycloid_coord = pos(t)
-        curve_coord = curve.equation(t)
-        fout.write(str(cycloid_coord[0]) + delimeter + str(cycloid_coord[1]) + delimeter + str(t) + '\n')
-        cycloid_samples_x[i], cycloid_samples_y[i] = cycloid_coord
-        curve_samples_x[i], curve_samples_y[i] = curve_coord
-        i += 1
+epicycloid.save("cycloid.dat")
 
-# Show `curve` via matplotlib.
-fig = plt.figure(1)
-ax = fig.add_subplot(111)
-ax.plot(cycloid_samples_x, cycloid_samples_y, color='r', linewidth=0.5)
-ax.plot(curve_samples_x, curve_samples_y, color='k', linewidth=0.5)
-ax.set_aspect(1)
-#  plt.savefig("cycloid.pdf", bbox_inches="tight")
-plt.savefig("cycloid.png", dpi=500, bbox_inches="tight")
-#  plt.show()
-plt.clf()
+# Save fig
+plot_curves([circle_samp, epicycloid], ["r", "k"], "cycloid.png")
