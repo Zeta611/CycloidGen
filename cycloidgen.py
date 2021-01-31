@@ -1,8 +1,35 @@
 from __future__ import annotations
-from scipy import integrate
+
+from typing import Sequence
+
 import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
+from scipy import integrate
+
+
+class SampledPath:
+    def __init__(self, begin: float = 0, end: float = 10, num: int = 50):
+        self.begin = begin
+        self.end = end
+        self.num = num
+
+        self.points = np.column_stack(
+            (np.linspace(begin, end, num), np.zeros((num, 2), dtype=float))
+        )
+
+    def __repr__(self) -> str:
+        return f"SampledPath(begin={self.begin}, end={self.end}, num={self.num})"
+
+    def __getitem__(self, key):
+        return self.points[key]
+
+    def save(self, filename: str, delimeter: str = "\t") -> None:
+        fmt = "{t}{delimeter}{x}{delimeter}{y}\n"
+        with open(filename, "w", encoding="utf-8") as fout:
+            fout.write(fmt.format(t="t", x="x", y="y", delimeter=delimeter))
+            for t, x, y in self.points:
+                fout.write(fmt.format(t=t, x=x, y=y, delimeter=delimeter))
 
 
 class ParametricCurve2d:
@@ -35,8 +62,14 @@ class ParametricCurve2d:
             )
         return self._deriv
 
+    def sample(self, begin: float = 1, end: float = 10, num: int = 50) -> SampledPath:
+        samples = SampledPath(begin, end, num)
+        for i, t in enumerate(samples.points[:, 0]):
+            samples.points[i, 1:] = self(t)
+        return samples
 
-class Cycloid:
+
+class Cycloid(SampledPath):
     def __init__(
         self,
         base_curve: ParametricCurve2d,
@@ -45,17 +78,14 @@ class Cycloid:
         end: float = 10,
         num: int = 50,
     ):
+        super().__init__(begin, end, num)
+
         self.base_curve = base_curve
         self.radius = radius
-        self.begin = begin
-        self.end = end
-        self.num = num
-
-        self._points = np.empty((num, 3), dtype=float)
 
         t_prev = begin
         theta = 0
-        for i, t in enumerate(np.linspace(begin, end, num)):
+        for i, t in enumerate(self.points[:, 0]):
             tangent = base_curve.deriv(t) / base_curve.deriv.norm(t)
             rotate = np.array(
                 [
@@ -63,26 +93,20 @@ class Cycloid:
                     [1 - np.cos(theta), -np.sin(theta)],
                 ]
             )
-            self._points[i] = t, *(base_curve(t) + radius * rotate @ tangent)
+            self.points[i, 1:] = base_curve(t) + radius * rotate @ tangent
             theta += integrate.quad(base_curve.deriv.norm, t_prev, t)[0] / radius
             t_prev = t
 
-    def __getitem__(self, key):
-        return self._points[key]
-
-    def __repr__(self):
-        return f"Cycloid({self.base_curve}, )"
-
-    def save(self, filename: str, delimeter: str = "\t") -> None:
-        fmt = "{t}{delimeter}{x}{delimeter}{y}\n"
-        with open(filename, "w", encoding="utf-8") as fout:
-            fout.write(fmt.format(t="t", x="x", y="y", delimeter=delimeter))
-            for t, x, y in self._points:
-                fout.write(fmt.format(t=t, x=x, y=y, delimeter=delimeter))
+    def __repr__(self) -> str:
+        return f"Cycloid({self.base_curve}, radius={self.radius}, begin={self.begin}, end={self.end}, num={self.num})"
 
 
 def plot_curves(
-    curve_samples, colors, filename: str, save: bool = True, show: bool = False
+    curve_samples: Sequence[SampledPath],
+    colors: Sequence[str],
+    filename: str,
+    save: bool = True,
+    show: bool = False,
 ) -> None:
     """Show `curve_samples` via matplotlib."""
     fig = plt.figure(1)
@@ -103,20 +127,17 @@ def plot_curves(
 
 # Constants
 RADIUS = 1
-START = 0
+BEGIN = 0
 END = 6.97
 NUM = 200
 
 _t = sp.Symbol("t")
 circle = ParametricCurve2d(sp.sin(_t), sp.cos(_t))
-epicycloid = Cycloid(circle, radius=RADIUS, begin=START, end=END, num=NUM)
-
-circle_samp = np.column_stack(
-    (epicycloid[:, 0], np.vstack([circle(t) for t in epicycloid[:, 0]]))
-)
+circle_samp = circle.sample(BEGIN, END, NUM)
+epicycloid = Cycloid(circle, radius=RADIUS, begin=BEGIN, end=END, num=NUM)
 
 # Save data for other visualization tools, e.g., TikZ.
 epicycloid.save("cycloid.dat")
 
 # Save fig
-plot_curves([circle_samp, epicycloid], ["r", "k"], "cycloid.png")
+plot_curves((circle_samp, epicycloid), "kr", "cycloid.png")
